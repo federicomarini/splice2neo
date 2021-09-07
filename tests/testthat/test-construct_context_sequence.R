@@ -63,7 +63,7 @@ test_that("juncid2context works", {
   junc_id <- "chr2_158156177_158157190_+"
   requireNamespace("BSgenome.Hsapiens.UCSC.hg19", quietly = TRUE)
   genome <-  BSgenome.Hsapiens.UCSC.hg19::BSgenome.Hsapiens.UCSC.hg19
-  res <- juncid2context(junc_id,
+  res <- juncid2context(junc_id =junc_id, tx_id = "ENST00000259056",
                  transcript_db = toy_transcripts,
                  genome_db = genome,
                  window_size = 200)
