@@ -1,6 +1,7 @@
 #' Returns all context sequences that can derive from a given junction id
 #'
-#' @param junc_id A junction id
+#' @param junc_id junction id
+#' @param tx_id transcript id
 #' @param transcript_db a GRangesList with transcripts composed of exon ranges
 #' @param genome_db The genome as DNAStringSet of the genomic sequences of each chromosome or a BSGenome object e.g. BSgenome.Hsapiens.UCSC.hg19
 #' @param window_size number of nucleotides left and right from the "breakpoint"
@@ -15,11 +16,12 @@
 #'@export
 juncid2context <-
   function(junc_id,
+           tx_id,
            transcript_db,
            genome_db,
            window_size = 200) {
     # junction table
-    junc_df <- tibble(junc_id = junc_id) %>%
+    junc_df <- tibble(junc_id = junc_id, enst = tx_id) %>%
       separate(
         junc_id,
         sep = "_",
@@ -27,26 +29,17 @@ juncid2context <-
         remove = FALSE
       ) %>%
       mutate(pos1 = as.integer(pos1), pos2 = as.integer(pos2))
+
+
     # build GRanges object for both junction positions
     junc_pos1 <-
       GenomicRanges::GRanges(junc_df$chr, junc_df$pos1, strand = junc_df$strand)
     junc_pos2 <-
       GenomicRanges::GRanges(junc_df$chr, junc_df$pos2, strand = junc_df$strand)
 
-    # identify transcripts that relate to junction id
-    transcripts_covering_junction <-
-      map_junc_transcript(
-        junc_id = junc_id,
-        junc_pos1 = junc_pos1,
-        junc_pos2 = junc_pos2,
-        junc_df = junc_df,
-        transcript_db = transcript_db
-      )
-
     #get context sequences for all transcripts covering a junction
-    context_sequences <- lapply(transcripts_covering_junction$enst, function(x) {
-      get_context_sequence(
-        transcript_id = x,
+    context_sequences <- get_context_sequence(
+        transcript_id = junc_df$enst,
         junc_pos1 = junc_pos1,
         junc_pos2 = junc_pos2,
         transcript_db = transcript_db,
@@ -54,77 +47,10 @@ juncid2context <-
         genome_db = genome_db,
         window_size = window_size
       )
-    })
 
     return(context_sequences)
   }
 
-
-#' Returns transcripts in which alternative splicing events are predicted
-#'
-#' @param junc_id A junction id
-#' @param junc_pos1 GRanges object for junction position 1
-#' @param junc_pos2 GRanges object for junction position 2
-#' @param junc_df A tibble with columns `junc_id`, `chr`, `pos1`, `pos2`, `strand`
-#' @param transcript_db a GRangesList with transcripts composed of exon ranges
-#'
-#' @return A tibble with columns `junc_id`, `chr`, `pos1`, `pos2`, `strand`,
-#'   `jidx`, `subjectHits`, `enst`. This tibble returns all transcripts that are
-#'   affected by a given junction.
-#'
-#' @examples
-#'
-#'@import dplyr
-#'
-#'@export
-# this function returns transcripts to which predicted splicing events represent alternative events
-map_junc_transcript <-
-  function(junc_id,
-           junc_pos1,
-           junc_pos2,
-           junc_df,
-           transcript_db) {
-
-    junc_to_transcript <- tibble()
-
-    # Get transcripts overlapping both junctions
-    transcripts_pos1 <-
-      GenomicRanges::findOverlaps(junc_pos1, transcript_db) %>% as.data.frame() %>% as_tibble()
-    transcripts_pos2 <-
-      GenomicRanges::findOverlaps(junc_pos2, transcript_db) %>% as.data.frame() %>% as_tibble()
-
-    if (nrow(transcripts_pos1) > 0 & nrow(transcripts_pos2) > 0) {
-      # both coordinates of junction event are located in exon sequence related to a transcript
-      # this does not capture acceptor gain in intron sequence
-      # exon skipping, 3'ASS acceptor gain in exon (+/-) + 5' ASS donor gain (+/-)
-      junc_idx_to_txidx <-
-        inner_join(transcripts_pos1, transcripts_pos2, by = c("queryHits", "subjectHits")) %>%
-        mutate(enst = names(transcript_db)[subjectHits])
-      junc_to_transcript <- junc_df %>%
-        mutate(jidx = seq_along(junc_id)) %>%
-        left_join(junc_idx_to_txidx, by = c("jidx" = "queryHits"))
-
-    } else if (nrow(transcripts_pos1) > 0 & nrow(transcripts_pos2) == 0) {
-      # only first coordinate of junction event is located in exon sequence
-      # second coordinate is located in intron sequence
-      # intron retention, 3' acceptor gain in intron sequence (+), 5' acceptor gain in intron sequence (+)
-      junc_to_transcript <- junc_df %>%
-        mutate(jidx = seq_along(junc_id)) %>%
-        left_join(transcripts_pos1, by = c("jidx" = "queryHits")) %>%
-        mutate(enst = names(transcript_db)[subjectHits])
-
-    } else if (nrow(transcripts_pos1) == 0 & nrow(transcripts_pos2) > 0) {
-      # first coordinate of junction event is located in intron sequence
-      # only second coordinate is located in exon sequence
-      # 5' donor gain in intron sequence (+), 3' acceptor gain in intron sequence (-)
-      junc_to_transcript <- junc_df %>%
-        mutate(jidx = seq_along(junc_id)) %>%
-        left_join(transcripts_pos2, by = c("jidx" = "queryHits")) %>%
-        mutate(enst = names(transcript_db)[subjectHits])
-
-    }
-    return(junc_to_transcript)
-  }
 
 
 #' Given the coordinates of junctions( junc1_gr, junc2_gr, strand.dir),
