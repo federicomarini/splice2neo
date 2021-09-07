@@ -4,10 +4,12 @@
 \alias{juncid2context}
 \title{Returns all context sequences that can derive from a given junction id}
 \usage{
-juncid2context(junc_id, transcript_db, genome_db, window_size = 200)
+juncid2context(junc_id, tx_id, transcript_db, genome_db, window_size = 200)
 }
 \arguments{
-\item{junc_id}{A junction id}
+\item{junc_id}{junction id}
+
+\item{tx_id}{transcript id}
 
 \item{transcript_db}{a GRangesList with transcripts composed of exon ranges}
 

@@ -228,7 +228,7 @@ construct_range_second_in_exon <- function(exon2_index,
     # e.g 5' ASS donor gain in intron (+)
     if (strand_direction == "+") {
       exon1_index <- which(!junction_start < transcript_range$start)[length(which(!junction_start < transcript_range$start))]
-      transcript_range$end[exon.1] <- junction_start
+      transcript_range$end[exon1_index] <- junction_start
       if (abs(exon1_index - exon2_index) != 1) {
         # there are some examples of junctions ids with splice donor in intron sequence with additional exon skipping
         exons_removed_index <-
@@ -240,7 +240,7 @@ construct_range_second_in_exon <- function(exon2_index,
       # e.g 3' ASS acceptor gain in intron (-)
     } else if (strand_direction == "-") {
       exon1_index <- which(junction_start > transcript_range$end)[1]
-      transcript_range$end[exon.1] <- junction_start
+      transcript_range$end[exon1_index] <- junction_start
       if (abs(exon1_index - exon2_index) != 1) {
         exons_removed_index <-
           seq(from = exon2_index + 1,
