@@ -86,5 +86,3 @@ map_requant <- function(path_to_easyquant_folder, junc_tib) {
     left_join(dat_easyqant, by = c("cts_id" = "name"))
   return(dat_junc)
 }
-
-
