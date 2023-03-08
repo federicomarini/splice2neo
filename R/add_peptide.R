@@ -50,9 +50,6 @@ add_peptide <- function(df, cds, full_pep_seq = TRUE, size = NULL, bsg = NULL, k
   stopifnot(class(cds) %in% c("GRangesList", "CompressedGRangesList"))
   stopifnot(is.logical(keep_ranges) & length(keep_ranges) == 1)
 
-  # check if all input transcript IDs are in contained in the CDS object
-  # stopifnot(all(df$tx_id %in% names(cds)))
-
   # take only the columns junc_id and tx_id and build unique combinations
   df_sub <- df %>%
     dplyr::distinct(junc_id, tx_id) %>%
@@ -70,6 +67,7 @@ add_peptide <- function(df, cds, full_pep_seq = TRUE, size = NULL, bsg = NULL, k
 
   # get junctions as GRanges object
   jx <- junc_to_gr(df_sub$junc_id)
+
   # test if junction is an intron retention event
   # TODO: are non IR junctions possible that follow the rule chr:pos-pos+1:strand?
   intron_retention <- ifelse(jx@ranges@width == 2, TRUE, FALSE)
@@ -193,4 +191,88 @@ seq_truncate_nonstop <- function(seq, pos){
 }
 
 
+#' annotate peptide sequence with wt and novel parts
+#'
+#' @param cds_mod  a named \code{\link[GenomicRanges]{GRangesList}} of the
+#'     modified (mutated) coding sequences (CDS) ranges
+#' @param cds_wt  a named \code{\link[GenomicRanges]{GRangesList}} of the
+#'     wild-type (unmodifed)coding sequences (CDS) ranges
+#' @param bsg \code{\link[BSgenome]{BSgenome}} object such as
+#'  \code{\link[BSgenome.Hsapiens.UCSC.hg19]{BSgenome.Hsapiens.UCSC.hg19}}
+#'
+#' @return A logical list indicating for each amino-acid residue of the modified
+#'    transcripts whether it is novel peptide or wild-type
+#'
+annot_neo <- function(cds_mod, cds_wt, bsg){
+
+  # get total length of CDS in nt and restrict it to multiple of 3 (for complete codons only)
+  cds_len_mod <- sum(BiocGenerics::width(cds_mod)) %/% 3 * 3
+  cds_len_wt <- sum(BiocGenerics::width(cds_wt)) %/% 3 * 3
+
+  # get first codon positions on CDS sequences
+  f1_mod <- purrr::map(cds_len_mod, ~seq(1, .x, 3))
+  f1_wt <- purrr::map(cds_len_wt, ~seq(1, .x, 3))
+
+  # get last codon positions on CDS sequences
+  f3_mod <- purrr::map(f1_mod, ~.x + 2)
+  # f3_mod <- purrr::map2(f3_mod, cds_len_mod, ~.x[.x <= .y])
+
+  f3_wt <- purrr::map(f1_wt, ~.x + 2)
+  # f3_wt <- purrr::map2(f3_wt, cds_len_wt, ~.x[.x <= .y])
+
+  # get strand of each
+  strand_mod <- sapply(BiocGenerics::strand(cds_mod), S4Vectors::runValue)
+  strand_wt <- sapply(BiocGenerics::strand(cds_wt), S4Vectors::runValue)
+
+  # calculate positions in genomic reference of codon starts
+  ref_start_mod <- GenomicFeatures::transcriptLocs2refLocs(
+    IRanges::IntegerList(f1_mod),
+    BiocGenerics::start(cds_mod),
+    BiocGenerics::end(cds_mod),
+    strand_mod,
+    decreasing.rank.on.minus.strand = TRUE)
+
+  # calculate positions in genomic reference of codon starts
+  ref_start_wt <- GenomicFeatures::transcriptLocs2refLocs(
+    IRanges::IntegerList(f1_wt),
+    BiocGenerics::start(cds_wt),
+    BiocGenerics::end(cds_wt),
+    strand_wt,
+    decreasing.rank.on.minus.strand = TRUE)
+
+  # calculate positions in genomic reference of codon ends
+  ref_end_mod <- GenomicFeatures::transcriptLocs2refLocs(
+    IRanges::IntegerList(f3_mod),
+    BiocGenerics::start(cds_mod),
+    BiocGenerics::end(cds_mod),
+    strand_mod,
+    decreasing.rank.on.minus.strand = TRUE)
+
+  # calculate positions in genomic reference of codon ends
+  ref_end_wt <- GenomicFeatures::transcriptLocs2refLocs(
+    IRanges::IntegerList(f3_wt),
+    BiocGenerics::start(cds_wt),
+    BiocGenerics::end(cds_wt),
+    strand_wt,
+    decreasing.rank.on.minus.strand = TRUE)
+
+  # For each pair of modified and wt cds, check for each genomic codon position if it is contained in the set of WT codon positions
+  neo_start <- purrr::map2(ref_start_mod, ref_start_wt, ~ !.x %in% .y)
+  # Do the same for codon end positions
+  neo_end <- purrr::map2(ref_end_mod, ref_end_wt, ~ !.x %in% .y)
+
+  is_neo <- purrr::map2(neo_start, neo_end, `|`)
+
+  # is_wt <- map2(ref_start_mod, ref_start_wt, ~ .x %in% .y)
+  # is_neo <- purrr::map2(ref_start_mod, ref_start_wt, ~ !.x %in% .y)
+
+  is_neo_rle <- IRanges::RleList(is_neo)
+
+  neo_range <- IRanges::IRangesList(is_neo_rle)
+
+  protein_mod[neo_range]
+
+  return(neo_range)
+
+}
 
