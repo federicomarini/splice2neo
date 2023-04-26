@@ -93,3 +93,21 @@ test_that("combine_mut_junc gives unique output", {
 
 })
 
+test_that("combine_mut_junc gives unique output with minimal input", {
+
+  df_pango_annot <- tribble(
+    ~mut_id,               ~tx_id,             ~junc_id,                    ~effect,
+    "chr2_179415988_C_CA", "ENST00000419746",  "chr2:179415962-179447299:+", "DG",
+    "chr2_179415988_C_CA", "ENST00000419746",  "chr2:179415962-179447299:+", "AG",
+  )
+  df_spliceai_annot <- tribble(
+    ~mut_id,               ~tx_id,             ~junc_id,                    ~effect,
+    "chr2_179415988_C_CA", "ENST00000419746",  "chr2:179415962-179447299:+", "DG"
+  )
+
+
+  df_combined <- combine_mut_junc(list(
+    pangolin = df_pango_annot,
+    spliceai = df_spliceai_annot))
+
+})

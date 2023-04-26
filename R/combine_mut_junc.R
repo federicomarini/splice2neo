@@ -5,6 +5,8 @@
 #'    The individual tibbles should at least contain the columns `mut_id`,
 #'    `tx_id`, `junc_id` and might have individual sets of other tool/source
 #'    specific columns.
+#'    Each input data set should contain unique rows with respect to columns
+#'    `mut_id`, `tx_id`, and `junc_id`.
 #'
 #' @return A combined data set with unique junctions based on the three columns
 #'    `mut_id`, `tx_id`, `junc_id`.
@@ -26,6 +28,14 @@ combine_mut_junc <- function(junc_data_list){
   stopifnot(all(map_lgl(junc_data_list, ~ "mut_id" %in% names(.x))))
   stopifnot(all(map_lgl(junc_data_list, ~ "junc_id" %in% names(.x))))
   stopifnot(all(map_lgl(junc_data_list, ~ "tx_id" %in% names(.x))))
+
+  # check that input data is unique
+  n_all_junc <- junc_data_list %>%
+    map_int(nrow)
+  n_unique_junc <- junc_data_list %>%
+    map(distinct, mut_id, tx_id, junc_id) %>%
+    map_int(nrow)
+  stopifnot(all(n_all_junc == n_unique_junc))
 
   # get union of junctions from all inputs with detection variables
   junc_df <- junc_data_list %>%
